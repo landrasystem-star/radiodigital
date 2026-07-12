@@ -1,0 +1,1942 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>📻 Radio Canarias - 153 Emisoras + Chat + Videos</title>
+    
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+    
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            background: #0a0f1a;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            padding: 20px;
+            overflow-y: auto;
+            transition: padding-right 0.4s ease;
+        }
+        body.chat-abierto {
+            padding-right: 340px;
+        }
+        
+        .radio-container {
+            max-width: 950px;
+            width: 100%;
+            background: linear-gradient(145deg, #1a2634, #0d1420);
+            border-radius: 50px;
+            padding: 30px;
+            box-shadow: 0 40px 80px rgba(0,0,0,0.8);
+            border: 1px solid rgba(255,255,255,0.03);
+            margin-top: 10px;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        
+        .volume-indicator {
+            position: fixed;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0,0,0,0.92);
+            padding: 25px 35px;
+            border-radius: 24px;
+            color: #f1f5f9;
+            font-size: 1.4rem;
+            font-weight: 600;
+            z-index: 200;
+            opacity: 0;
+            transition: opacity 0.15s ease;
+            pointer-events: none;
+            border: 1px solid rgba(251, 191, 36, 0.2);
+            text-align: center;
+            min-width: 160px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.9);
+        }
+        .volume-indicator.show { opacity: 1; }
+        .volume-indicator .vol-icon { font-size: 2.5rem; display: block; margin-bottom: 5px; }
+        .volume-indicator .vol-text { font-size: 1.2rem; letter-spacing: 1px; }
+        .volume-indicator .vol-bar {
+            width: 120px;
+            height: 6px;
+            background: #1e2a3a;
+            border-radius: 6px;
+            margin: 10px auto 0;
+            overflow: hidden;
+        }
+        .volume-indicator .vol-bar-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #fbbf24, #f59e0b);
+            border-radius: 6px;
+            transition: width 0.05s linear;
+        }
+        
+        .radio-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        .radio-header .brand {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .radio-header .brand h1 {
+            color: #f1f5f9;
+            font-size: 1.6rem;
+            font-weight: 700;
+        }
+        .radio-header .brand h1 span {
+            background: linear-gradient(135deg, #fbbf24, #f59e0b);
+            background-clip: text;
+            -webkit-background-clip: text;
+            color: transparent;
+        }
+        .radio-header .brand .icon { font-size: 2rem; }
+        .badge-internet {
+            background: rgba(74, 222, 128, 0.15);
+            color: #4ade80;
+            padding: 6px 14px;
+            border-radius: 60px;
+            font-size: 0.65rem;
+            font-weight: 600;
+            border: 1px solid rgba(74, 222, 128, 0.2);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .badge-internet .dot {
+            width: 6px;
+            height: 6px;
+            background: #4ade80;
+            border-radius: 50%;
+            display: inline-block;
+            animation: pulse 1.5s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.3; transform: scale(0.7); }
+        }
+        
+        .radio-display {
+            background: #0d1420;
+            border-radius: 24px;
+            padding: 20px;
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            margin-bottom: 15px;
+            border: 1px solid rgba(255,255,255,0.04);
+            flex-wrap: wrap;
+            transition: border 0.3s ease, box-shadow 0.3s ease;
+        }
+        .radio-display .logo {
+            width: 90px;
+            height: 90px;
+            border-radius: 20px;
+            background: #1a2634;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            font-size: 3.2rem;
+            border: 2px solid rgba(251, 191, 36, 0.15);
+        }
+        .radio-display .info { flex: 1; min-width: 120px; }
+        .radio-display .info .name {
+            color: #f1f5f9;
+            font-size: 1.2rem;
+            font-weight: 700;
+            margin-bottom: 2px;
+            transition: color 0.3s ease;
+        }
+        .radio-display .info .freq { color: #94a3b8; font-size: 0.8rem; }
+        .radio-display .info .status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 6px;
+            font-size: 0.8rem;
+            flex-wrap: wrap;
+        }
+        .radio-display .info .status .playing { color: #4ade80; }
+        .radio-display .info .status .stopped { color: #94a3b8; }
+        .radio-display .info .status .error { color: #ef4444; }
+        .radio-display .info .status .offline { color: #f59e0b; }
+        .radio-display .info .status .recovering { color: #60a5fa; }
+        .format-badge {
+            display: inline-block;
+            background: rgba(251, 191, 36, 0.15);
+            color: #fbbf24;
+            padding: 2px 10px;
+            border-radius: 40px;
+            font-size: 0.6rem;
+            font-weight: 600;
+            border: 1px solid rgba(251, 191, 36, 0.1);
+        }
+        .song-info {
+            font-size: 0.75rem;
+            color: #94a3b8;
+            margin-top: 4px;
+            min-height: 20px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        .song-info .song-title { color: #f1f5f9; font-weight: 500; }
+        .song-info .song-artist { color: #60a5fa; }
+        .song-info .song-album { color: #64748b; font-size: 0.65rem; }
+        .song-info .no-data { color: #64748b; font-style: italic; }
+        .song-info .loading { color: #fbbf24; animation: parpadeo 1.5s infinite; }
+        @keyframes parpadeo {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.3; }
+        }
+        
+        .channel-indicator {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            margin-bottom: 10px;
+            background: #0d1420;
+            padding: 6px 14px;
+            border-radius: 40px;
+            border: 1px solid rgba(255,255,255,0.04);
+        }
+        .channel-indicator .nav-btn {
+            background: rgba(251, 191, 36, 0.1);
+            color: #fbbf24;
+            border: 1px solid rgba(251, 191, 36, 0.15);
+            padding: 6px 14px;
+            border-radius: 30px;
+            font-size: 0.8rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            min-width: 60px;
+            font-weight: 600;
+        }
+        .channel-indicator .nav-btn:hover {
+            background: rgba(251, 191, 36, 0.2);
+            transform: scale(1.02);
+        }
+        .channel-indicator .nav-btn:active { transform: scale(0.95); }
+        .channel-indicator .counter {
+            color: #94a3b8;
+            font-size: 0.8rem;
+            font-weight: 500;
+            min-width: 50px;
+            text-align: center;
+        }
+        .channel-indicator .counter span { color: #f1f5f9; font-weight: 700; }
+        
+        .selector-section { margin-bottom: 12px; }
+        .selector-section select {
+            width: 100%;
+            padding: 12px 16px;
+            background: #0d1420;
+            color: #f1f5f9;
+            border: 1px solid #1e2a3a;
+            border-radius: 16px;
+            font-size: 0.9rem;
+            font-weight: 500;
+            cursor: pointer;
+            outline: none;
+            transition: all 0.3s;
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='8' viewBox='0 0 14 8'%3E%3Cpath d='M1 1l6 6 6-6' stroke='%2394a3b8' stroke-width='2' fill='none'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 16px center;
+        }
+        .selector-section select:focus {
+            border-color: #fbbf24;
+            box-shadow: 0 0 0 3px rgba(251, 191, 36, 0.08);
+        }
+        .selector-section select option {
+            background: #1a2634;
+            color: #f1f5f9;
+            padding: 10px;
+        }
+        .selector-section select optgroup {
+            background: #0d1420;
+            color: #fbbf24;
+            font-weight: 700;
+            font-size: 0.85rem;
+            padding: 8px 0;
+        }
+        .selector-section select optgroup option {
+            background: #1a2634;
+            color: #f1f5f9;
+            padding: 8px 12px 8px 24px;
+            font-weight: 400;
+        }
+        .selector-section select optgroup option:hover {
+            background: #2a3a4a;
+        }
+        
+        .audio-controls {
+            background: #0d1420;
+            border-radius: 60px;
+            padding: 8px 14px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            border: 1px solid rgba(255,255,255,0.04);
+            flex-wrap: nowrap;
+            overflow-x: auto;
+        }
+        .audio-controls audio {
+            flex: 1;
+            min-width: 80px;
+            height: 44px;
+            border-radius: 40px;
+        }
+        .audio-controls audio::-webkit-media-controls-panel { background: #0d1420; }
+        .audio-controls .btn-play {
+            background: linear-gradient(135deg, #fbbf24, #f59e0b);
+            color: #0a0f1a;
+            border: none;
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            font-size: 1.2rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            font-weight: 700;
+            order: 1;
+        }
+        .audio-controls .btn-play:hover {
+            transform: scale(1.05);
+            box-shadow: 0 8px 30px rgba(251, 191, 36, 0.3);
+        }
+        .audio-controls .btn-play:active { transform: scale(0.92); }
+        .btn-search {
+            background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+            color: #fff;
+            border: none;
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            font-size: 1.2rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            font-weight: 700;
+            box-shadow: 0 4px 15px rgba(139, 92, 246, 0.3);
+            order: 2;
+        }
+        .btn-search:hover {
+            transform: scale(1.05);
+            box-shadow: 0 8px 30px rgba(139, 92, 246, 0.5);
+        }
+        .btn-search:active { transform: scale(0.92); }
+        .btn-search.active {
+            background: linear-gradient(135deg, #ef4444, #dc2626);
+            box-shadow: 0 4px 15px rgba(239, 68, 68, 0.4);
+            animation: pulse-search 1.5s infinite;
+        }
+        .btn-search.active:hover {
+            box-shadow: 0 8px 30px rgba(239, 68, 68, 0.6);
+        }
+        .audio-controls audio { order: 3; }
+        @keyframes pulse-search {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+        
+        .radio-footer {
+            margin-top: 15px;
+            padding-top: 14px;
+            border-top: 1px solid rgba(255,255,255,0.05);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        .radio-footer .info-text { color: #475569; font-size: 0.7rem; }
+        .radio-footer .info-text strong { color: #94a3b8; }
+        .radio-footer .url-box {
+            background: #0d1420;
+            padding: 4px 12px;
+            border-radius: 40px;
+            font-family: monospace;
+            font-size: 0.55rem;
+            color: #475569;
+            border: 1px solid #1a2634;
+            max-width: 100%;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .radio-footer .count {
+            color: #64748b;
+            font-size: 0.65rem;
+            background: #0d1420;
+            padding: 4px 12px;
+            border-radius: 40px;
+            border: 1px solid #1a2634;
+            font-weight: 600;
+        }
+        
+        .warning-msg {
+            background: rgba(251, 191, 36, 0.06);
+            border: 1px solid rgba(251, 191, 36, 0.1);
+            color: #fbbf24;
+            padding: 8px 14px;
+            border-radius: 14px;
+            font-size: 0.7rem;
+            margin-top: 10px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .touch-hint {
+            color: #475569;
+            font-size: 0.55rem;
+            text-align: center;
+            margin-top: 8px;
+            border-top: 1px solid rgba(255,255,255,0.03);
+            padding-top: 8px;
+            display: flex;
+            justify-content: center;
+            flex-wrap: wrap;
+            gap: 6px 12px;
+        }
+        .touch-hint span {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .touch-hint .key {
+            background: rgba(255,255,255,0.05);
+            padding: 1px 6px;
+            border-radius: 4px;
+            font-size: 0.5rem;
+            color: #94a3b8;
+        }
+        
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateX(-50%) translateY(20px); }
+            to { opacity: 1; transform: translateX(-50%) translateY(0); }
+        }
+        .auto-search-msg {
+            position: fixed;
+            bottom: 100px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0,0,0,0.92);
+            color: #8b5cf6;
+            padding: 12px 24px;
+            border-radius: 30px;
+            font-size: 1rem;
+            font-weight: 600;
+            z-index: 300;
+            border: 1px solid #8b5cf644;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.8);
+            pointer-events: none;
+            animation: fadeInUp 0.3s ease;
+            font-family: 'Segoe UI', system-ui, sans-serif;
+        }
+
+        /* ============================================ */
+        /* 🎬 PESTAÑA VIDEOS - LADO IZQUIERDO          */
+        /* ============================================ */
+        
+        .videos-tab {
+            position: fixed;
+            left: 0;
+            top: 50%;
+            transform: translateY(-50%);
+            z-index: 9999;
+            background: linear-gradient(135deg, #ef4444, #dc2626);
+            color: #fff;
+            padding: 8px 6px;
+            border-radius: 0 10px 10px 0;
+            font-size: 0.6rem;
+            cursor: pointer;
+            user-select: none;
+            transition: all 0.3s ease;
+            box-shadow: 4px 0 15px rgba(239, 68, 68, 0.2);
+            border: 1px solid rgba(255,255,255,0.06);
+            border-left: none;
+            min-height: 40px;
+            width: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .videos-tab:hover {
+            background: linear-gradient(135deg, #dc2626, #b91c1c);
+            padding-left: 10px;
+            width: 36px;
+            box-shadow: 6px 0 25px rgba(239, 68, 68, 0.4);
+        }
+        .videos-tab .videos-icon {
+            font-size: 1.1rem;
+            transition: transform 0.3s ease;
+        }
+        .videos-tab:hover .videos-icon {
+            transform: scale(1.15);
+        }
+
+        /* ============================================ */
+        /* 🎯 CHAT LATERAL TRANSLÚCIDO                  */
+        /* ============================================ */
+        
+        .chat-lateral {
+            position: fixed;
+            top: 50%;
+            right: 0;
+            transform: translateY(-50%);
+            z-index: 9999;
+            display: flex;
+            align-items: center;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        
+        .chat-tab {
+            writing-mode: vertical-rl;
+            text-orientation: mixed;
+            background: linear-gradient(135deg, #7c3aed, #6d28d9);
+            color: #fff;
+            padding: 16px 10px;
+            border-radius: 12px 0 0 12px;
+            font-weight: 600;
+            font-size: 0.85rem;
+            letter-spacing: 1px;
+            cursor: pointer;
+            user-select: none;
+            transition: all 0.3s ease;
+            box-shadow: -4px 0 20px rgba(124, 58, 237, 0.3);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            flex-shrink: 0;
+            border: 1px solid rgba(255,255,255,0.08);
+            border-right: none;
+            min-height: 140px;
+            position: relative;
+        }
+        .chat-tab:hover {
+            background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+            padding-right: 14px;
+            box-shadow: -6px 0 30px rgba(124, 58, 237, 0.4);
+        }
+        .chat-tab .tab-icon { font-size: 1.2rem; writing-mode: horizontal-tb; }
+        .chat-tab .tab-text {
+            writing-mode: vertical-rl;
+            text-orientation: mixed;
+            font-size: 0.7rem;
+            letter-spacing: 2px;
+        }
+        .chat-tab .tab-badge {
+            position: absolute;
+            top: 8px;
+            right: 6px;
+            width: 18px;
+            height: 18px;
+            background: #ef4444;
+            border-radius: 50%;
+            font-size: 0.5rem;
+            color: white;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            writing-mode: horizontal-tb;
+            box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4);
+        }
+        .chat-tab .tab-badge.visible { display: flex; animation: noti-pulse 2s ease-in-out infinite; }
+        @keyframes noti-pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.2); }
+        }
+        
+        .chat-container {
+            width: 0;
+            max-height: 520px;
+            overflow: hidden;
+            background: rgba(18, 28, 46, 0.85);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border-radius: 16px 0 0 16px;
+            border: 1px solid rgba(255,255,255,0.06);
+            border-right: none;
+            box-shadow: -8px 0 40px rgba(0,0,0,0.5);
+            transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            display: flex;
+            flex-direction: column;
+            flex-shrink: 0;
+        }
+        .chat-lateral.open .chat-container { width: 320px; }
+        .chat-lateral.open .chat-tab { border-radius: 0; padding-right: 12px; }
+        
+        .chat-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 14px;
+            background: rgba(13, 20, 32, 0.3);
+            border-bottom: 1px solid rgba(255,255,255,0.04);
+            flex-shrink: 0;
+        }
+        .chat-header .info {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .chat-header .info .icon { font-size: 1rem; }
+        .chat-header .info .title {
+            color: #f1f5f9;
+            font-weight: 600;
+            font-size: 0.8rem;
+        }
+        .chat-header .info .badge {
+            color: #4ade80;
+            font-size: 0.5rem;
+            background: rgba(74, 222, 128, 0.12);
+            padding: 2px 8px;
+            border-radius: 20px;
+            font-weight: 600;
+        }
+        .chat-header .close-btn {
+            background: none;
+            border: none;
+            color: #64748b;
+            font-size: 1rem;
+            cursor: pointer;
+            padding: 4px 8px;
+            border-radius: 6px;
+            transition: all 0.2s;
+        }
+        .chat-header .close-btn:hover {
+            background: rgba(255,255,255,0.05);
+            color: #ef4444;
+        }
+        
+        .chat-body {
+            flex: 1;
+            min-height: 0;
+            background: rgba(13, 20, 32, 0.1);
+            padding: 4px;
+        }
+        .chat-body iframe {
+            width: 100%;
+            height: 400px;
+            border: none;
+            border-radius: 8px;
+            background: transparent;
+            display: block;
+        }
+        
+        .chat-footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 4px 14px;
+            background: rgba(13, 20, 32, 0.1);
+            border-top: 1px solid rgba(255,255,255,0.02);
+            flex-shrink: 0;
+        }
+        .chat-footer .tip {
+            color: #64748b;
+            font-size: 0.5rem;
+        }
+        .chat-footer .tip .dot { color: #4ade80; }
+        .chat-footer .by {
+            color: #475569;
+            font-size: 0.45rem;
+            text-decoration: none;
+        }
+        .chat-footer .by:hover { color: #64748b; }
+
+        /* ============================================ */
+        /* 📱 RESPONSIVE                                */
+        /* ============================================ */
+        
+        @media (max-width: 650px) {
+            .radio-container { padding: 20px; border-radius: 30px; }
+            .radio-display { flex-direction: column; align-items: center; text-align: center; padding: 16px; }
+            .radio-display .logo { width: 70px; height: 70px; font-size: 2.5rem; }
+            .radio-display .info .name { font-size: 1rem; }
+            .audio-controls { padding: 8px 10px; gap: 8px; border-radius: 40px; flex-wrap: nowrap; overflow-x: auto; }
+            .audio-controls .btn-play, .btn-search { width: 40px; height: 40px; font-size: 1rem; flex-shrink: 0; }
+            .audio-controls audio { min-width: 60px; height: 38px; flex: 1; }
+            .radio-footer { flex-direction: column; align-items: stretch; }
+            .radio-footer .url-box { white-space: normal; word-break: break-all; }
+            .radio-header .brand h1 { font-size: 1.2rem; }
+            .badge-internet { font-size: 0.55rem; padding: 4px 10px; }
+            .touch-hint { font-size: 0.45rem; }
+            .volume-indicator { padding: 14px 20px; font-size: 1rem; min-width: 120px; }
+            .volume-indicator .vol-bar { width: 90px; }
+            .song-info { font-size: 0.65rem; }
+            
+            /* Videos tab */
+            .videos-tab {
+                padding: 6px 5px;
+                min-height: 34px;
+                width: 26px;
+                border-radius: 0 8px 8px 0;
+            }
+            .videos-tab:hover {
+                width: 30px;
+                padding-left: 8px;
+            }
+            .videos-tab .videos-icon {
+                font-size: 0.9rem;
+            }
+            
+            /* Chat */
+            body.chat-abierto { padding-right: 0; }
+            .chat-lateral {
+                top: 0;
+                transform: none;
+                height: 100vh;
+                align-items: stretch;
+                right: 0;
+                pointer-events: none;
+            }
+            .chat-lateral .chat-tab { pointer-events: auto; }
+            .chat-lateral .chat-container { pointer-events: auto; }
+            .chat-tab {
+                padding: 12px 8px;
+                min-height: 100px;
+                font-size: 0.7rem;
+                border-radius: 10px 0 0 10px;
+            }
+            .chat-tab .tab-text { font-size: 0.6rem; }
+            .chat-tab .tab-badge {
+                width: 20px;
+                height: 20px;
+                font-size: 0.55rem;
+                top: 4px;
+                right: 4px;
+            }
+            .chat-lateral.open .chat-container {
+                width: 85vw;
+                max-height: 95vh;
+                height: 95vh;
+                border-radius: 20px 0 0 20px;
+                background: rgba(18, 28, 46, 0.82);
+                backdrop-filter: blur(20px);
+                -webkit-backdrop-filter: blur(20px);
+                box-shadow: -10px 0 50px rgba(0,0,0,0.6);
+            }
+            .chat-body iframe {
+                height: calc(95vh - 100px);
+                min-height: 300px;
+                background: transparent;
+            }
+            .chat-header {
+                padding: 14px 16px;
+                background: rgba(13, 20, 32, 0.2);
+            }
+            .chat-header .info .title { font-size: 0.9rem; }
+            .chat-header .close-btn { font-size: 1.3rem; padding: 8px 12px; }
+            .chat-footer { background: rgba(13, 20, 32, 0.1); }
+        }
+        
+        @media (max-width: 400px) {
+            .radio-container { padding: 12px; border-radius: 24px; }
+            .radio-display .logo { width: 60px; height: 60px; font-size: 2rem; }
+            .radio-display .info .name { font-size: 0.9rem; }
+            .audio-controls { padding: 6px 8px; gap: 6px; }
+            .audio-controls .btn-play, .btn-search { width: 36px; height: 36px; font-size: 0.8rem; }
+            .audio-controls audio { min-width: 50px; height: 34px; }
+            .volume-indicator { padding: 12px 16px; font-size: 0.9rem; min-width: 100px; }
+            .volume-indicator .vol-bar { width: 70px; }
+            .song-info { font-size: 0.55rem; }
+            
+            .videos-tab {
+                padding: 5px 4px;
+                min-height: 28px;
+                width: 22px;
+                border-radius: 0 6px 6px 0;
+            }
+            .videos-tab:hover {
+                width: 26px;
+                padding-left: 6px;
+            }
+            .videos-tab .videos-icon {
+                font-size: 0.75rem;
+            }
+            
+            .chat-lateral.open .chat-container {
+                width: 92vw;
+                height: 98vh;
+                max-height: 98vh;
+                background: rgba(18, 28, 46, 0.88);
+                backdrop-filter: blur(24px);
+                -webkit-backdrop-filter: blur(24px);
+            }
+            .chat-body iframe {
+                height: calc(98vh - 80px);
+                min-height: 250px;
+            }
+            .chat-header {
+                padding: 10px 12px;
+            }
+            .chat-header .info .title { font-size: 0.8rem; }
+            .chat-header .close-btn { font-size: 1.1rem; padding: 6px 10px; }
+            .chat-tab {
+                min-height: 70px;
+                padding: 8px 6px;
+            }
+            .chat-tab .tab-icon { font-size: 1.1rem; }
+            .chat-tab .tab-text { font-size: 0.5rem; }
+        }
+        
+        @media (max-height: 500px) and (orientation: landscape) {
+            .chat-lateral.open .chat-container {
+                width: 60vw;
+                max-height: 98vh;
+                height: 98vh;
+                background: rgba(18, 28, 46, 0.80);
+                backdrop-filter: blur(16px);
+                -webkit-backdrop-filter: blur(16px);
+            }
+            .chat-body iframe {
+                height: calc(98vh - 80px);
+                min-height: 180px;
+            }
+            .chat-tab {
+                min-height: 50px;
+                padding: 6px 4px;
+            }
+            .chat-tab .tab-text { font-size: 0.45rem; }
+        }
+    </style>
+</head>
+<body>
+
+<!-- ============================================ -->
+<!-- 🎬 PESTAÑA VIDEOS - LADO IZQUIERDO          -->
+<!-- ============================================ -->
+<div class="videos-tab" id="videosTab" title="Abrir videos">
+    <span class="videos-icon">🎬</span>
+</div>
+
+<!-- ============================================ -->
+<!-- 📻 RADIO PRINCIPAL                          -->
+<!-- ============================================ -->
+<div class="radio-container">
+    <!-- ===== VOLUMEN INDICATOR ===== -->
+    <div class="volume-indicator" id="volumeIndicator">
+        <span class="vol-icon" id="volIcon">🔊</span>
+        <span class="vol-text" id="volText">50%</span>
+        <div class="vol-bar">
+            <div class="vol-bar-fill" id="volBarFill" style="width:50%"></div>
+        </div>
+    </div>
+
+    <!-- ===== HEADER ===== -->
+    <div class="radio-header">
+        <div class="brand">
+            <span class="icon">📻</span>
+            <h1><span>Radio</span> Canarias</h1>
+        </div>
+        <div class="badge-internet" id="badgeCount">
+            <span class="dot"></span> <span id="badgeNumber">153</span> EMISORAS
+        </div>
+    </div>
+
+    <!-- ===== DISPLAY ===== -->
+    <div class="radio-display" id="radioDisplay">
+        <div class="logo" id="logoContainer">📡</div>
+        <div class="info">
+            <div class="name" id="radioName">Selecciona una emisora</div>
+            <div class="freq" id="radioFreq">🌍 Disponible en todo el mundo</div>
+            <div class="status">
+                <span id="statusText" class="stopped">⏸️ En espera</span>
+                <span id="formatBadge" class="format-badge">MP3</span>
+            </div>
+            <div class="song-info" id="songInfo">
+                <span class="no-data">🎵 Esperando reproducción...</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== CHANNEL INDICATOR ===== -->
+    <div class="channel-indicator">
+        <button class="nav-btn" id="prevBtn">◀</button>
+        <span class="counter" id="channelCounter">1 / <span id="totalChannels">153</span></span>
+        <button class="nav-btn" id="nextBtn">▶</button>
+    </div>
+
+    <!-- ===== SELECTOR ===== -->
+    <div class="selector-section">
+        <select id="radioSelector">
+            <option value="" disabled selected>── Elige una emisora ──</option>
+            
+            <!-- ============================================ -->
+            <!-- 🇮🇨 CANARIAS (63)                            -->
+            <!-- ============================================ -->
+            <optgroup label="🇮🇨 Canarias (63)">
+                <option value="https://uk1.streamingpulse.com/ssl/inolvidablefm" data-icon="🎵" data-freq="95.8 FM · Gran Canaria">🎵 Inolvidable FM</option>
+                <option value="https://stream.classichitsradio.net:8000/tenerife" data-icon="🌊" data-freq="102.5 FM · Tenerife">🌊 Coast FM (Tenerife)</option>
+                <option value="https://stream.zeno.fm/da3ysra1zehvv" data-icon="📡" data-freq="Stream · Canarias">📡 Vigilante Radio</option>
+                <option value="https://laspalmas-copesedes-rrcast.flumotion.com/copesedes/laspalmas-low.mp3" data-icon="📢" data-freq="99.1 FM · Gran Canaria">📢 Cadena Cope (Gran Canaria)</option>
+                <option value="https://panel5.soydigital.fm/8030/stream" data-icon="🔊" data-freq="95.2 FM · Tenerife">🔊 La Diez (Tenerife)</option>
+                <option value="https://f111.rndfnk.com/star/crtve/rne5/main/mp3/128/stream.mp3?aggregator=tunein&cid=01GEP4MW5CAHPYP1EXHVKWFJ8W&sid=2IWwik0pjflt7nAGvQgtygm0AAM&token=1knEpvqSpAKuPzAyUxWBrQjLujroiydtm-t0wrYvC08&tvf=IzQvaHI2LhdmMTExLnJuZGZuay5jb20" data-icon="📻" data-freq="90.3 FM · Madrid">📻 RNE Radio 5 (Madrid)</option>
+                <option value="https://playerservices.streamtheworld.com/api/livestream-redirect/LOS40_SC" data-icon="🎶" data-freq="93.9 FM · Madrid">🎶 Los 40 Principales (Madrid)</option>
+                <option value="https://rtvc-radio.flumotion.com/rtvc-radio/radio1-high.mp3" data-icon="📻" data-freq="RTVC · Canarias">📻 Canarias Radio (RTVC)</option>
+                <option value="https://stream.airwavebroadcast.com/listen/energy_fm/energy" data-icon="⚡" data-freq="106.0 FM · Canarias">⚡ Energy FM</option>
+                <option value="https://eu1.lhdserver.es:3199/stream" data-icon="📻" data-freq="95.1 FM · Canarias">📻 Hola FM</option>
+                <option value="https://s1.viastreaming.net:7120/stream/1/" data-icon="🌴" data-freq="101.0 FM · Tenerife">🌴 Oasis FM (Tenerife)</option>
+                <option value="https://server8.emitironline.com:18163/stream" data-icon="📻" data-freq="102.2 FM · Tenerife">📻 Radio Gigante (Tenerife)</option>
+                <option value="https://cervera.eldialdigital.com:22131/stream" data-icon="📻" data-freq="94.5 FM · Canarias">📻 Radio Marca (Canarias)</option>
+                <option value="https://playerservices.streamtheworld.com/api/livestream-redirect/SER_LAS_PALMASAAC_SC" data-icon="📻" data-freq="102.4 FM · Las Palmas">📻 SER Las Palmas</option>
+                <option value="https://playerservices.streamtheworld.com/api/livestream-redirect/SER_TENERIFEAAC_SC" data-icon="📻" data-freq="101.1 FM · Tenerife">📻 Radio Club Tenerife</option>
+                <option value="https://panel.amediastream.eu:8500/live" data-icon="🇳🇱" data-freq="90.7 FM · Gran Canaria">🇳🇱 Holland FM (Gran Canaria)</option>
+                <option value="https://streaming.enacast.com/radiocarrizal128.mp3" data-icon="📻" data-freq="101.7 FM · Gran Canaria">📻 Radio Carrizal</option>
+                <option value="https://radio.streamenginelogin.com:8018/stream" data-icon="📻" data-freq="104.2 FM · Gran Canaria">📻 Radio Faycan (Gran Canaria)</option>
+                <option value="https://sonic.mediatelekom.net/9054/stream/1/" data-icon="🏝️" data-freq="90.7 FM · Lanzarote">🏝️ Radio Lanzarote</option>
+                <option value="https://eu1.lhdserver.es:8055/stream" data-icon="📻" data-freq="88.0 FM · Las Palmas">📻 Radio Sintonía (Las Palmas)</option>
+                <option value="https://relay.stream.enacast-cloud.com:40213/carmelomartinHD.mp3" data-icon="📻" data-freq="107.8 FM · Telde">📻 Radio Aventura (Telde)</option>
+                <option value="https://sonic.sistemahost.es/8260/stream" data-icon="📻" data-freq="Stream · Canarias">📻 Radio MEGA</option>
+                <option value="https://escucha.calima.fm/stream" data-icon="🇮🇹" data-freq="98.8 FM · Gran Canaria">🇮🇹 Radio Calima</option>
+                <option value="https://mediastreamm.com/8176/stream" data-icon="🐐" data-freq="106.7 FM · Fuerteventura">🐐 Radio SurFM (Aguacabras)</option>
+                <option value="http://radio.digitalfarocanarias.com/listen/radio_faro/RadioFaro" data-icon="🏖️" data-freq="92.5 / 107.5 FM · Maspalomas">🏖️ Radio Faro (Maspalomas)</option>
+                <option value="https://oceano-2.nty.uy/netradio/listen.mp3:8000/;?download=false" data-icon="🌊" data-freq="100.8 FM · Vecindario">🌊 Océano Radio (Vecindario)</option>
+                <option value="https://radiostreaming.online:8006/stream" data-icon="📻" data-freq="98.3 FM · Vecindario">📻 Radio Las Tirajanas (Vecindario)</option>
+                <option value="https://bbkissfm.kissfmradio.cires21.com/bbkissfm.mp3" data-icon="🎵" data-freq="102.4 FM · Las Palmas">🎵 KISS FM (Canarias)</option>
+                <option value="https://srv7021.dns-lcinternet.com/8076/stream" data-icon="🌍" data-freq="96.8 / 90.1 FM · Cruce de Arinaga">🌍 Radio Planeta Gran Canaria</option>
+                <option value="https://stream.zeno.fm/972ksag0xqzuv" data-icon="📻" data-freq="102.2 FM · Gran Canaria">📻 Radio Ingenio (Gran Canaria)</option>
+                <option value="https://radiostreaming.online/8004/stream" data-icon="🎵" data-freq="92.0 / 95.9 FM · Maspalomas">🎵 Radio Top 21 (Gran Canaria)</option>
+                <option value="https://radiostreaming.online/8008/stream" data-icon="🌬️" data-freq="Stream · Gran Canaria">🌬️ Wind Radio (Gran Canaria)</option>
+                <option value="https://srv7031.dns-lcinternet.com/8090/stream" data-icon="📻" data-freq="96.5 FM · Santa María de Guía">📻 Radio Faro del Noroeste</option>
+                <option value="http://server6.20comunicacion.com:8038/*36000.stream" data-icon="📻" data-freq="90.8 / 104.8 FM · Las Palmas">📻 Radio Tamarán</option>
+                <option value="https://radio.garden/api/ara/content/listen/ZdPg9MaB/channel.mp3" data-icon="📻" data-freq="107.9 FM · Gáldar (Gran Canaria)">📻 Radio Gáldar (RG)</option>
+                <option value="https://radio.garden/api/ara/content/listen/Ck8gvt6T/channel.mp3" data-icon="📻" data-freq="103.6 FM · Tejina (Tenerife)">📻 Radio Tejina 103.6 FM</option>
+                <option value="https://radio.garden/api/ara/content/listen/LGbRTLLt/channel.mp3" data-icon="📻" data-freq="94.6 FM · Candelaria (Tenerife)">📻 Radio Cadena Canarias (RCC FM)</option>
+                <option value="https://radio.garden/api/ara/content/listen/Z1SYd0gF/channel.mp3" data-icon="📻" data-freq="Stream · Güímar (Tenerife)">📻 Radio 6 Tenerife</option>
+                <option value="https://radio.garden/api/ara/content/listen/jsTQDh9r/channel.mp3" data-icon="📻" data-freq="Stream · Canarias">📻 En La Tarima Radio</option>
+                <option value="https://radio.garden/api/ara/content/listen/ZJfI2DmQ/channel.mp3" data-icon="🎵" data-freq="Stream · Taganana (Tenerife)">🎵 Orquestas del Atlántico</option>
+                <option value="https://radio.garden/api/ara/content/listen/wdoS5kbJ/channel.mp3" data-icon="📻" data-freq="Stream · Tegueste (Tenerife)">📻 Onda Inclusiva Tenerife</option>
+                <option value="https://radio.garden/api/ara/content/listen/CAF1QqCI/channel.mp3" data-icon="📻" data-freq="Stream · Canarias">📻 Marcha FM</option>
+                <option value="https://radio.garden/api/ara/content/listen/AhCuj6Dt/channel.mp3" data-icon="📻" data-freq="95.6 FM · Puerto de la Cruz (Tenerife)">📻 Gente Radio FM 95.6</option>
+                <option value="https://radio.garden/api/ara/content/listen/lyuevHJS/channel.mp3" data-icon="📻" data-freq="102.0 FM · Canarias">📻 Son FM 102.0</option>
+                <option value="https://radio.garden/api/ara/content/listen/XTwscnVL/channel.mp3" data-icon="📻" data-freq="DAB+ 7c · Costa del Silencio (Tenerife)">📻 FM Goud Tenerife DAB+ 7c</option>
+                <option value="https://radio.garden/api/ara/content/listen/WFqKLfDi/channel.mp3" data-icon="📻" data-freq="Stream · Canarias">📻 Onda Tagoror FM</option>
+                <option value="https://radio.garden/api/ara/content/listen/BrbrT4N5/channel.mp3" data-icon="📻" data-freq="99.9 FM · Tías (Lanzarote)">📻 Monster Radio 99.9 FM</option>
+                <option value="https://radio.garden/api/ara/content/listen/DfZGGcrT/channel.mp3" data-icon="📻" data-freq="90.2 FM · Arrecife (Lanzarote)">📻 Lancelot Radio 90.2 FM</option>
+                <option value="https://radio.garden/api/ara/content/listen/rOnvEwsI/channel.mp3" data-icon="📻" data-freq="101.7 FM · Mácher (Lanzarote)">📻 Atlantis FM 101.7</option>
+                <option value="https://radio.garden/api/ara/content/listen/lTpHIS62/channel.mp3" data-icon="🌍" data-freq="96.8 FM · Agüimes (Gran Canaria)">🌍 Radio Planeta Gran Canaria FM 96.8</option>
+                <option value="https://radio.garden/api/ara/content/listen/HEUbELVe/channel.mp3" data-icon="🌺" data-freq="107.3 FM · San Bartolomé de Tirajana (Gran Canaria)">🌺 Radio Primavera GC 107.3 FM</option>
+                <option value="https://radio.garden/api/ara/content/listen/Xiz5DLg6/channel.mp3" data-icon="🏖️" data-freq="92.5 FM · San Bartolomé de Tirajana (Gran Canaria)">🏖️ Radio Faro FM 92.5</option>
+                <option value="https://radio.garden/api/ara/content/listen/fey9ntDg/channel.mp3" data-icon="🇩🇪" data-freq="105.3 FM · Las Palmas de Gran Canaria">🇩🇪 Radio Europa Das Schlagerradio FM 105.3</option>
+                <option value="https://radio.garden/api/ara/content/listen/EsYXX5wS/channel.mp3" data-icon="📻" data-freq="Stream · Granadilla de Abona (Tenerife)">📻 Radio Tiempo Tenerife</option>
+                <option value="https://radio.garden/api/ara/content/listen/qXa4Tehh/channel.mp3" data-icon="🎵" data-freq="Stream · San Cristóbal de La Laguna (Tenerife)">🎵 Puro Sabor FM - Zona Norte y Sur</option>
+                <option value="https://radio.garden/api/ara/content/listen/8VQBEXuM/channel.mp3" data-icon="🎸" data-freq="Stream · Tejina (Tenerife)">🎸 Radio Jazz, Rock & Blues</option>
+                <option value="https://radio.garden/api/ara/content/listen/abiwbZyL/channel.mp3" data-icon="🎵" data-freq="Stream · Puerto del Rosario (Fuerteventura)">🎵 Xtra Musica</option>
+                <option value="https://radio.garden/api/ara/content/listen/Y0KqLf2n/channel.mp3" data-icon="📻" data-freq="Stream · Puerto del Rosario (Fuerteventura)">📻 Radio Sintonía</option>
+                <option value="https://radio.garden/api/ara/content/listen/1qHUPOAU/channel.mp3" data-icon="🏝️" data-freq="107.9 FM · Sant Francesc Xavier (Formentera)">🏝️ Ràdio Illa Formentera FM 107.9</option>
+                <option value="https://radio.garden/api/ara/content/listen/cbhcS2F7/channel.mp3" data-icon="🏝️" data-freq="Stream · Sant Antoni de Portmany (Ibiza)">🏝️ Balearic FM</option>
+            </optgroup>
+            <optgroup label="🏖️ Fuerteventura (7)">
+                <option value="https://solid55.streamupsolutions.com/proxy/xwidmsar/stream" data-icon="🏖️" data-freq="Stream · Fuerteventura">🏖️ Onda Fuerteventura</option>
+                <option value="https://directo.radioinsular.es/proxy/insular2/stream" data-icon="🏖️" data-freq="Stream · Fuerteventura">🏖️ Radio Insular Fuerteventura</option>
+                <option value="https://radio.garden/api/ara/content/listen/lk5eWE1Y/channel.mp3" data-icon="🏖️" data-freq="Stream · Puerto del Rosario (Fuerteventura)">🏖️ Radio Insular Fuerteventura (RG)</option>
+                <option value="https://radio.garden/api/ara/content/listen/opRJspvS/channel.mp3" data-icon="🏖️" data-freq="106.3 FM · Fuerteventura">🏖️ Sur FM 106.3</option>
+                <option value="https://radio.garden/api/ara/content/listen/bSAAJbeu/channel.mp3" data-icon="🏖️" data-freq="Stream · Puerto del Rosario (Fuerteventura)">🏖️ Viva FM Fuerteventura</option>
+                <option value="https://radio.garden/api/ara/content/listen/5VMGryCN/channel.mp3" data-icon="🏖️" data-freq="107.9 FM · Castillo Caleta de Fuste (Fuerteventura)">🏖️ Real FM 107.9</option>
+                <option value="https://radio.garden/api/ara/content/listen/rGUwTwbf/channel.mp3" data-icon="🏖️" data-freq="94.0 FM · Corralejo (Fuerteventura)">🏖️ Dunas FM 94</option>
+            </optgroup>
+            <optgroup label="🏝️ Lanzarote (4)">
+                <option value="https://server10.emitironline.com:8062/;stream/1" data-icon="🏝️" data-freq="Stream · Lanzarote">🏝️ Mi Tierra FM (Lanzarote)</option>
+                <option value="https://radio.garden/api/ara/content/listen/BrbrT4N5/channel.mp3" data-icon="📻" data-freq="99.9 FM · Tías (Lanzarote)">📻 Monster Radio 99.9 FM</option>
+                <option value="https://radio.garden/api/ara/content/listen/DfZGGcrT/channel.mp3" data-icon="📻" data-freq="90.2 FM · Arrecife (Lanzarote)">📻 Lancelot Radio 90.2 FM</option>
+                <option value="https://radio.garden/api/ara/content/listen/rOnvEwsI/channel.mp3" data-icon="📻" data-freq="101.7 FM · Mácher (Lanzarote)">📻 Atlantis FM 101.7</option>
+            </optgroup>
+            <optgroup label="🏝️ Baleares (3)">
+                <option value="https://radio.garden/api/ara/content/listen/rZM7abFF/channel.mp3" data-icon="🎧" data-freq="Stream · Ibiza (España)">🎧 Graba Radio Ibiza</option>
+                <option value="https://radio.garden/api/ara/content/listen/bpd4mpb1/channel.mp3" data-icon="⭐" data-freq="Stream · Cala Llonga (Ibiza)">⭐ Ibiza Stardust Radio</option>
+                <option value="https://radio.garden/api/ara/content/listen/1qHUPOAU/channel.mp3" data-icon="🏝️" data-freq="107.9 FM · Sant Francesc Xavier (Formentera)">🏝️ Ràdio Illa Formentera FM 107.9</option>
+            </optgroup>
+            <optgroup label="🇲🇦 Marruecos (2)">
+                <option value="https://radio.garden/api/ara/content/listen/tKwhSmS7/channel.mp3" data-icon="🇲🇦" data-freq="Stream · Ksar es Seghir (Marruecos)">🇲🇦 Radio Tanger Med</option>
+                <option value="https://radio.garden/api/ara/content/listen/R4Ixj5Qm/channel.mp3" data-icon="🇲🇦" data-freq="Stream · Tánger (Marruecos)">🇲🇦 Radio Medi1 - Latino</option>
+            </optgroup>
+            <optgroup label="🌋 El Hierro (1)">
+                <option value="https://str1.mediatelekom.net:9952/live" data-icon="🌋" data-freq="Stream · El Hierro">🌋 Rumberos FM (El Hierro)</option>
+            </optgroup>
+            <optgroup label="🇫🇷 Francia (2)">
+                <option value="https://streaming.nrjaudio.fm/oug7girb92oc?origine=tuned" data-icon="🇫🇷" data-freq="Stream · Francia">🇫🇷 Nostalgie (Francia)</option>
+                <option value="https://radio.garden/api/ara/content/listen/raaALRl8/channel.mp3" data-icon="🎵" data-freq="Stream · Francia">🎵 La Confiserie Sonore</option>
+            </optgroup>
+            <optgroup label="🇮🇹 Italia (3)">
+                <option value="https://dd782ed59e2a4e86aabf6fc508674b59.msvdn.net/live/S8448465/TxhFMf45Q7cw/playlist_audio.m3u8" data-icon="🇮🇹" data-freq="102.5 FM · Italia">🇮🇹 RTL 102.5 Caliente (Italia)</option>
+                <option value="https://radio.garden/api/ara/content/listen/6ohbAneJ/channel.mp3" data-icon="🇮🇹" data-freq="Stream · Macomer (Italia)">🇮🇹 Radio Macomer Centrale</option>
+                <option value="https://radio.garden/api/ara/content/listen/7u2DDKVk/channel.mp3" data-icon="🇮🇹" data-freq="98.4 FM · Antonimina (Italia)">🇮🇹 Radio Terme FM 98.4</option>
+            </optgroup>
+            <optgroup label="🇺🇸 Estados Unidos (3)">
+                <option value="https://radio.garden/api/ara/content/listen/K0TBxCjQ/channel.mp3" data-icon="🇺🇸" data-freq="98.9 FM · Buffalo, NY (EE.UU.)">🇺🇸 WBBF 98.9 FM The Vibe</option>
+                <option value="https://radio.garden/api/ara/content/listen/rai6jcGO/channel.mp3" data-icon="🇺🇸" data-freq="104.9 FM · Fairfield, IL (EE.UU.)">🇺🇸 WFIW FM 104.9</option>
+                <option value="https://radio.garden/api/ara/content/listen/hcmW99BE/channel.mp3" data-icon="🇺🇸" data-freq="Stream · Orlando, FL (EE.UU.)">🇺🇸 Power Live Radio</option>
+            </optgroup>
+            <optgroup label="🇨🇺 Cuba (3)">
+                <option value="https://radio.garden/api/ara/content/listen/sWO5ip8K/channel.mp3" data-icon="🇨🇺" data-freq="Stream · La Habana (Cuba)">🇨🇺 Radio Progreso</option>
+                <option value="https://radio.garden/api/ara/content/listen/LwhDzVGC/channel.mp3" data-icon="🇨🇺" data-freq="Stream · Cienfuegos (Cuba)">🇨🇺 Radio Ciudad del Mar</option>
+                <option value="https://radio.garden/api/ara/content/listen/cJjDAOoE/channel.mp3" data-icon="🇨🇺" data-freq="Stream · Nuevitas (Cuba)">🇨🇺 Radio Nuevitas FM</option>
+            </optgroup>
+            <optgroup label="🇩🇴 República Dominicana (2)">
+                <option value="https://radio.garden/api/ara/content/listen/9XaTY4ff/channel.mp3" data-icon="🇩🇴" data-freq="1200 AM · Azua (Rep. Dominicana)">🇩🇴 Radio Caracol 1200 AM</option>
+                <option value="https://radio.garden/api/ara/content/listen/wpGgvdk1/channel.mp3" data-icon="🇩🇴" data-freq="Stream · Santo Domingo (Rep. Dominicana)">🇩🇴 Radio Antillas</option>
+            </optgroup>
+            <optgroup label="🇵🇷 Puerto Rico (2)">
+                <option value="https://radio.garden/api/ara/content/listen/IPCCMryZ/channel.mp3" data-icon="🇵🇷" data-freq="740 AM · San Juan (Puerto Rico)">🇵🇷 WIAC 740 AM</option>
+                <option value="https://radio.garden/api/ara/content/listen/K9MHLqi9/channel.mp3" data-icon="🇵🇷" data-freq="Stream · San Juan (Puerto Rico)">🇵🇷 Musica En Vivo Radio</option>
+            </optgroup>
+            <optgroup label="🌍 Internacional (2)">
+                <option value="https://mixfm.radionetz.de/mixfm.mp3" data-icon="📻" data-freq="Stream · Mix FM">📻 Mix FM</option>
+                <option value="https://radio.garden/api/ara/content/listen/9dOIq9Mw/channel.mp3" data-icon="🇳🇱" data-freq="Stream · Países Bajos">🇳🇱 Rivierenland Radio</option>
+            </optgroup>
+            <optgroup label="🇸🇪 Suecia (5)">
+                <option value="https://live1.sr.se/p1-aac-320" data-icon="🇸🇪" data-freq="Stream · Suecia">🇸🇪 SR P1 (Suecia)</option>
+                <option value="https://live1.sr.se/p2-aac-320" data-icon="🇸🇪" data-freq="Stream · Suecia">🇸🇪 SR P2 (Suecia)</option>
+                <option value="https://live1.sr.se/p3-aac-320" data-icon="🇸🇪" data-freq="Stream · Suecia">🇸🇪 SR P3 (Suecia)</option>
+                <option value="https://live1.sr.se/p6-aac-320" data-icon="🇸🇪" data-freq="Stream · Suecia">🇸🇪 SR P6 (Suecia)</option>
+                <option value="https://radio.garden/api/ara/content/listen/I06HFYHS/channel.mp3" data-icon="🇸🇪" data-freq="98.1 FM · Åmål (Suecia)">🇸🇪 Radio 45 FM 98.1</option>
+            </optgroup>
+            <optgroup label="🇫🇮 Finlandia (1)">
+                <option value="https://radio.garden/api/ara/content/listen/jd5VLIFj/channel.mp3" data-icon="🇫🇮" data-freq="88.8 FM · Oulu (Finlandia)">🇫🇮 Sea FM 88.8</option>
+            </optgroup>
+            <optgroup label="🇪🇸 España (15)">
+                <option value="https://radio-atres-live.ondacero.es/api/livestream-redirect/EFM_LAS_PALMASAAC.m3u8?dist=ATRESMEDIA-Web&r=mdynk" data-icon="🇪🇸" data-freq="97.1 FM · Las Palmas">🇪🇸 Europa FM (España)</option>
+                <option value="https://app.sonicpanelradio.com/8072/stream" data-icon="🎵" data-freq="Stream · Las Palmas">🎵 9 Radio (Las Palmas)</option>
+                <option value="https://cadena100-cope.flumotion.com/playlist.m3u8" data-icon="🎵" data-freq="89.4 FM · Madrid">🎵 Cadena 100 (España)</option>
+                <option value="https://atres-live.ondacero.es/live/ondacero/master.m3u8" data-icon="📻" data-freq="FM · Madrid">📻 Onda Cero (España)</option>
+                <option value="https://stream.zeno.fm/sbfxdfgiomtuv" data-icon="🎵" data-freq="Stream · España">🎵 Yasshop (España)</option>
+                <option value="https://stream.zeno.fm/sfqwqh7vd6quv" data-icon="🎵" data-freq="Stream · Zeno.FM">🎵 La Tronadora (Streaming)</option>
+                <option value="https://eu-playerservices.streamtheworld.com/api/livestream-redirect/LOS40_URBAN_SC" data-icon="🎵" data-freq="Stream · España">🎵 LOS40 Urban (España)</option>
+                <option value="https://eu-playerservices.streamtheworld.com/api/livestream-redirect/LOS40_CLASSIC_SC" data-icon="🎵" data-freq="Stream · España">🎵 LOS40 Classic (España)</option>
+                <option value="https://eu-playerservices.streamtheworld.com/api/livestream-redirect/LOS40_DANCE_SC" data-icon="🎵" data-freq="Stream · España">🎵 LOS40 Dance (España)</option>
+                <option value="https://playerservices.streamtheworld.com/api/livestream-redirect/CADENADIAL_SC" data-icon="🎵" data-freq="101.4 FM · Las Palmas">🎵 Cadena Dial (España)</option>
+                <option value="https://libertaddigital-radio-live1.flumotion.com/libertaddigital/ld-live1-low.mp3" data-icon="📻" data-freq="99.1 FM · Madrid">📻 esRadio (España)</option>
+                <option value="https://radio.garden/api/ara/content/listen/h1SQfRTv/channel.mp3" data-icon="📻" data-freq="Stream · Ceuta (España)">📻 Radio Ceuta Cadena SER</option>
+                <option value="https://radio.garden/api/ara/content/listen/0Sx7nxcH/channel.mp3" data-icon="📻" data-freq="Stream · España">📻 Radio Bahía Libre</option>
+                <option value="https://radio.garden/api/ara/content/listen/MJv8IDbn/channel.mp3" data-icon="🌊" data-freq="Stream · Cádiz (España)">🌊 Onda Litoral Cadiz</option>
+                <option value="https://radio.garden/api/ara/content/listen/be6vQLQZ/channel.mp3" data-icon="📻" data-freq="Stream · Solsona (España)">📻 Solsona FM</option>
+            </optgroup>
+            <optgroup label="🇨🇱 Chile (5)">
+                <option value="https://sonic.mallocohosting.cl:8108/stream" data-icon="🇨🇱" data-freq="Stream · Chile">🇨🇱 Máxima Stereo (Chile)</option>
+                <option value="https://maxradio.azuracast.com.es:8020/stream/1/" data-icon="🎵" data-freq="Stream · Chile">🎵 Radio Maxima FM (Chile)</option>
+                <option value="https://stream.radioclub80.cl:8052/trancelive80.mp3" data-icon="🎵" data-freq="Stream · Chile">🎵 Club 80 Trance (Chile)</option>
+                <option value="https://redirector.dps.live/biobiosantiago/mp3/icecast.audio" data-icon="📻" data-freq="99.7 FM · Chile">📻 Radio Bío Bío (Chile)</option>
+                <option value="https://24363.live.streamtheworld.com:443/IMAGINAAAC_SC" data-icon="🎵" data-freq="88.1 FM · Chile">🎵 Radio Imagina (Chile)</option>
+            </optgroup>
+            <optgroup label="🇵🇹 Portugal (5)">
+                <option value="https://stream-hls.rayo.pt/m80.aac/playlist.m3u8?direct=true" data-icon="🎵" data-freq="104.3 FM · Lisboa">🎵 M80 Rádio (Portugal)</option>
+                <option value="https://stream-hls.rayo.pt/comercial.aac/playlist.m3u8?direct=true" data-icon="📻" data-freq="FM · Portugal">📻 Rádio Comercial (Portugal)</option>
+                <option value="https://stream-hls.rayo.pt/cidade.aac/playlist.m3u8?direct=true" data-icon="🌆" data-freq="FM · Portugal">🌆 Cidade FM (Portugal)</option>
+                <option value="https://stream-hls.rayo.pt/smooth.aac/playlist.m3u8?direct=true" data-icon="🎷" data-freq="FM · Portugal">🎷 Smooth FM (Portugal)</option>
+                <option value="https://stream-hls.rayo.pt/batidafm.aac/playlist.m3u8?direct=true" data-icon="🎶" data-freq="Stream · Portugal">🎶 Batida FM (Portugal)</option>
+            </optgroup>
+            <optgroup label="🇦🇷 Argentina (2)">
+                <option value="https://frontend.radiohdvivo.com/continental/live" data-icon="🇦🇷" data-freq="AM 590 · Buenos Aires">🇦🇷 Radio Continental (Argentina)</option>
+                <option value="https://playerservices.streamtheworld.com/api/livestream-redirect/ASPEN_SC" data-icon="🎷" data-freq="102.3 FM · Buenos Aires">🎷 FM Aspen (Argentina)</option>
+            </optgroup>
+            <optgroup label="🇻🇪 Venezuela (2)">
+                <option value="https://stream.zeno.fm/xc0q62tc9f0uv" data-icon="🇻🇪" data-freq="Streaming · Caracas">🇻🇪 LOS40 Venezuela</option>
+                <option value="https://acp4.lorini.net:2050/stream" data-icon="🇻🇪" data-freq="107.3 FM · Caracas">🇻🇪 La Mega Estación (Venezuela)</option>
+            </optgroup>
+            <optgroup label="🇬🇷 Grecia (2)">
+                <option value="https://s6.onweb.gr/8012/stream" data-icon="🎵" data-freq="106.4 FM · Volos, Grecia">🎵 Top FM (Tukumuca) - Grecia</option>
+                <option value="https://cast6.my-control-panel.com/proxy/venus1051/stream" data-icon="🇬🇷" data-freq="Stream · Grecia">🇬🇷 Venus FM (Grecia)</option>
+            </optgroup>
+            <optgroup label="🇵🇱 Polonia (6)">
+                <option value="https://rs102-krk.rmfstream.pl/rmf_fm" data-icon="🇵🇱" data-freq="Stream · Polonia">🇵🇱 RMF FM (Polonia)</option>
+                <option value="https://ice2.radioi.pl:8443/stream" data-icon="🇵🇱" data-freq="Stream · Polonia">🇵🇱 Radio I (Polonia) ⏳</option>
+                <option value="https://radio.garden/api/ara/content/listen/pzoGcNsV/channel.mp3" data-icon="🇵🇱" data-freq="96.9 FM · Szczecin (Polonia)">🇵🇱 ESKA Szczecin 96.9 FM</option>
+                <option value="https://radio.garden/api/ara/content/listen/wg1BMlyO/channel.mp3" data-icon="🇵🇱" data-freq="Stream · Varsovia (Polonia)">🇵🇱 Radio ZET</option>
+                <option value="https://radio.garden/api/ara/content/listen/ZMah3fCw/channel.mp3" data-icon="🇵🇱" data-freq="Stream · Varsovia (Polonia)">🇵🇱 Tok FM</option>
+                <option value="https://radio.garden/api/ara/content/listen/JFM_Du9t/channel.mp3" data-icon="🇵🇱" data-freq="Stream · Varsovia (Polonia)">🇵🇱 Radio 357</option>
+            </optgroup>
+            <optgroup label="🇩🇪 Alemania (2)">
+                <option value="http://stream.antenne.de:80/oldies-but-goldies" data-icon="🎵" data-freq="Oldies · Alemania">🎵 Antenne Bayern Oldies (Alemania)</option>
+                <option value="http://stream.antenne.de:80/heavy-metal" data-icon="🎸" data-freq="Heavy Metal · Alemania">🎸 Rock Antenne Heavy Metal (Alemania)</option>
+            </optgroup>
+            <optgroup label="🇷🇴 Rumanía (2)">
+                <option value="https://live4ro.antenaplay.ro/radiozu/radiozu-48000.m3u8" data-icon="🇷🇴" data-freq="89.0 FM · Bucarest">🇷🇴 Radio ZU (Rumanía)</option>
+                <option value="https://edge76.rcs-rds.ro/digifm/digifm.mp3" data-icon="🇷🇴" data-freq="97.9 FM · Rumanía">🇷🇴 Digi FM (Rumanía)</option>
+            </optgroup>
+            <optgroup label="🌐 Zeno.FM (3)">
+                <option value="https://stream.zeno.fm/97gyvgz7kyvtv" data-icon="🎶" data-freq="Stream · Zeno.FM">🎶 Wonder 80s (Streaming)</option>
+                <option value="https://stream.zeno.fm/qmhf2yd9dm0uv" data-icon="🎵" data-freq="Stream · Zeno.FM">🎵 Reggaeton Radio (Streaming)</option>
+                <option value="https://stream.zeno.fm/mxr8ltjsf3vuv" data-icon="🎸" data-freq="Stream · Zeno.FM">🎸 Classic Rock Vibes AAC (Streaming)</option>
+            </optgroup>
+            <optgroup label="🇩🇰 Dinamarca (DR)">
+                <option value="https://drliveradio2.akamaized.net/hls/live/2118698/p1/masterab.m3u8" data-icon="🇩🇰" data-freq="Stream · Dinamarca">🇩🇰 DR P1</option>
+                <option value="https://drliveradio2.akamaized.net/hls/live/2118698/p2/masterab.m3u8" data-icon="🇩🇰" data-freq="Stream · Dinamarca">🇩🇰 DR P2</option>
+                <option value="https://drliveradio2.akamaized.net/hls/live/2118698/p3/masterab.m3u8" data-icon="🇩🇰" data-freq="Stream · Dinamarca">🇩🇰 DR P3</option>
+                <option value="https://drliveradio2.akamaized.net/hls/live/2118698/p4syd/masterab.m3u8" data-icon="🇩🇰" data-freq="Stream · Dinamarca">🇩🇰 DR P4</option>
+                <option value="https://drliveradio2.akamaized.net/hls/live/2118698/p5syd/masterab.m3u8" data-icon="🇩🇰" data-freq="Stream · Dinamarca">🇩🇰 DR P5</option>
+                <option value="https://drliveradio2.akamaized.net/hls/live/2118698/p6/masterab.m3u8" data-icon="🇩🇰" data-freq="Stream · Dinamarca">🇩🇰 DR P6</option>
+                <option value="https://drliveradio2.akamaized.net/hls/live/2118698/p8/masterab.m3u8" data-icon="🇩🇰" data-freq="Stream · Dinamarca">🇩🇰 DR P8</option>
+            </optgroup>
+        </select>
+    </div>
+
+    <!-- ===== AUDIO CONTROLS ===== -->
+    <div class="audio-controls">
+        <button class="btn-play" id="playBtn">▶</button>
+        <button class="btn-search" id="searchBtn" title="Búsqueda automática 🔍">🔍</button>
+        <audio id="radioPlayer" controls preload="none">
+            <source id="audioSource" src="" type="audio/mpeg">
+            Tu navegador no soporta audio HTML5.
+        </audio>
+    </div>
+
+    <div class="warning-msg">
+        <span>💡</span>
+        <span>🔴 Selecciona una emisora y dale al Play.</span>
+    </div>
+
+    <div class="radio-footer">
+        <span class="count" id="stationCount">📻 153 emisoras</span>
+        <span class="url-box" id="urlBox">🔗 Selecciona una emisora</span>
+        <span class="info-text">🌍 <strong>Internet Radio</strong></span>
+    </div>
+
+    <div class="touch-hint">
+        <span>⬆️⬇️ <span class="key">Volumen</span></span>
+        <span>⬅️➡️ <span class="key">Canales</span></span>
+        <span>👆👆 <span class="key">Play/Pausa</span></span>
+        <span>⌨️ <span class="key">Flechas</span></span>
+        <span>🔍 <span class="key">Botón lupa</span> Búsqueda automática</span>
+        <span>💾 <span class="key">Guarda</span> Última emisora</span>
+        <span>🔄 <span class="key">Reconexión</span> automática</span>
+        <span>🚀 <span class="key">Auto-play</span> al iniciar</span>
+        <span>🔋 <span class="key">Recuperación</span> en escalera</span>
+        <span>🎬 <span class="key">Videos</span> Pestaña izquierda</span>
+        <span>💬 <span class="key">Chat lateral</span> Clic o hover</span>
+    </div>
+</div>
+
+<!-- ============================================ -->
+<!-- 🎯 CHAT LATERAL TRANSLÚCIDO                  -->
+<!-- ============================================ -->
+<div class="chat-lateral" id="chatLateral">
+    <div class="chat-tab" id="chatTab">
+        <span class="tab-icon">💬</span>
+        <span class="tab-text">CHAT</span>
+        <span class="tab-badge" id="tabBadge">1</span>
+    </div>
+    <div class="chat-container" id="chatContainer">
+        <div class="chat-header">
+            <div class="info">
+                <span class="icon">💬</span>
+                <span class="title">Chat de la Radio</span>
+                <span class="badge" id="chatBadge">● 0</span>
+            </div>
+            <button class="close-btn" id="chatCloseBtn" title="Cerrar">✕</button>
+        </div>
+        <div class="chat-body">
+            <iframe id="chatIframe" 
+                    src="https://www.canalchat.org/chat/canarias" 
+                    allow="microphone; camera"
+                    loading="lazy">
+            </iframe>
+        </div>
+        <div class="chat-footer">
+            <span class="tip">💡 <span class="dot">●</span> Conéctate con otros oyentes</span>
+            <a href="https://www.canalchat.org/" target="_blank" class="by">canalchat.org</a>
+        </div>
+    </div>
+</div>
+
+<script>
+// ============================================================
+// 🎯 REPRODUCTOR PRINCIPAL
+// ============================================================
+
+const selector = document.getElementById('radioSelector');
+const audioPlayer = document.getElementById('radioPlayer');
+const sourceElem = document.getElementById('audioSource');
+const playBtn = document.getElementById('playBtn');
+const searchBtn = document.getElementById('searchBtn');
+const radioName = document.getElementById('radioName');
+const radioFreq = document.getElementById('radioFreq');
+const statusText = document.getElementById('statusText');
+const logoContainer = document.getElementById('logoContainer');
+const urlBox = document.getElementById('urlBox');
+const formatBadge = document.getElementById('formatBadge');
+const prevBtn = document.getElementById('prevBtn');
+const nextBtn = document.getElementById('nextBtn');
+const channelCounter = document.getElementById('channelCounter');
+const totalChannels = document.getElementById('totalChannels');
+const songInfo = document.getElementById('songInfo');
+const volumeIndicator = document.getElementById('volumeIndicator');
+const volIcon = document.getElementById('volIcon');
+const volText = document.getElementById('volText');
+const volBarFill = document.getElementById('volBarFill');
+
+let hls = null;
+let isHlsStream = false;
+let autoSearchInterval = null;
+let autoSearchActive = false;
+let wasOffline = false;
+let reconnectAttempts = 0;
+let reconnectTimer = null;
+let recoveryAttempts = 0;
+let maxRecoveryAttempts = 3;
+let lastCurrentTime = 0;
+let stuckCount = 0;
+let isRecovering = false;
+let lastPlayTime = Date.now();
+let tapCount = 0;
+let tapTimer = null;
+let volumeTimeout = null;
+
+const TOTAL_STATIONS = 153;
+totalChannels.textContent = TOTAL_STATIONS;
+
+// ===== METADATOS =====
+function extraerIdRadioGarden(url) {
+    if (!url) return null;
+    const match = url.match(/\/listen\/([a-zA-Z0-9]+)/);
+    return match ? match[1] : null;
+}
+
+async function obtenerMetadatosRadioGarden(stationId) {
+    if (!stationId) return null;
+    try {
+        const apiUrl = `https://radio.garden/api/ara/content/station/${stationId}`;
+        const response = await fetch(apiUrl);
+        if (!response.ok) return null;
+        const data = await response.json();
+        if (data && data.data) {
+            const now = data.data.now || data.data.current || data.data.track;
+            if (now) {
+                return {
+                    title: now.title || now.name || null,
+                    artist: now.artist || now.creator || null,
+                    album: now.album || now.song || null,
+                    cover: now.cover || now.image || null
+                };
+            }
+            if (data.data.track) {
+                return {
+                    title: data.data.track.title || null,
+                    artist: data.data.track.artist || null,
+                    album: data.data.track.album || null
+                };
+            }
+        }
+        return null;
+    } catch(e) {
+        return null;
+    }
+}
+
+let currentStationId = null;
+let actualizandoMetadatos = false;
+
+function actualizarCancion(titulo, artista, album) {
+    if (!songInfo) return;
+    if (titulo) {
+        let html = `<span class="song-title">🎵 ${titulo}</span>`;
+        if (artista) {
+            html += ` · <span class="song-artist">🎤 ${artista}</span>`;
+        }
+        if (album) {
+            html += ` · <span class="song-album">💿 ${album}</span>`;
+        }
+        songInfo.innerHTML = html;
+    } else {
+        songInfo.innerHTML = `<span class="no-data">📻 Reproduciendo en vivo - Sin información</span>`;
+    }
+}
+
+async function actualizarMetadatos() {
+    if (!currentStationId || actualizandoMetadatos) return;
+    actualizandoMetadatos = true;
+    if (songInfo) {
+        songInfo.innerHTML = `<span class="loading">🔄 Obteniendo información...</span>`;
+    }
+    const metadata = await obtenerMetadatosRadioGarden(currentStationId);
+    if (metadata && (metadata.title || metadata.artist)) {
+        actualizarCancion(metadata.title, metadata.artist, metadata.album);
+    } else {
+        if (songInfo) {
+            songInfo.innerHTML = `<span class="no-data">📻 Reproduciendo en vivo - Sin información</span>`;
+        }
+    }
+    actualizandoMetadatos = false;
+}
+
+// ===== GUARDAR ÚLTIMA EMISORA =====
+function saveLastStation(index) {
+    try {
+        const option = selector.options[index];
+        if (option && option.value) {
+            localStorage.setItem('lastStationIndex', index);
+            localStorage.setItem('lastStationValue', option.value);
+            localStorage.setItem('lastStationName', option.textContent.trim());
+        }
+    } catch(e) {}
+}
+
+function loadLastStation() {
+    try {
+        const lastIndex = localStorage.getItem('lastStationIndex');
+        if (lastIndex && parseInt(lastIndex) > 0 && parseInt(lastIndex) < selector.options.length) {
+            const index = parseInt(lastIndex);
+            selector.selectedIndex = index;
+            updateDisplay();
+            updateCounter();
+            setTimeout(() => {
+                if (!audioPlayer.paused && navigator.onLine) {
+                    audioPlayer.play().catch(() => {});
+                }
+            }, 500);
+            return true;
+        }
+    } catch(e) {}
+    return false;
+}
+
+function getCurrentIndex() { return selector.selectedIndex; }
+
+function goToStation(index) {
+    if (index >= 1 && index < selector.options.length) {
+        selector.selectedIndex = index;
+        updateDisplay();
+        updateCounter();
+    }
+}
+
+function nextStation() {
+    const current = getCurrentIndex();
+    goToStation(current + 1 < selector.options.length ? current + 1 : 1);
+}
+
+function prevStation() {
+    const current = getCurrentIndex();
+    goToStation(current - 1 >= 1 ? current - 1 : selector.options.length - 1);
+}
+
+function updateCounter() {
+    const current = getCurrentIndex();
+    channelCounter.innerHTML = `${current >= 1 ? current : '-'} / <span id="totalChannels">${TOTAL_STATIONS}</span>`;
+}
+
+function showVolume(volume) {
+    const vol = Math.round(volume * 100);
+    volText.textContent = vol + '%';
+    volBarFill.style.width = vol + '%';
+    if (vol === 0) volIcon.textContent = '🔇';
+    else if (vol < 33) volIcon.textContent = '🔈';
+    else if (vol < 66) volIcon.textContent = '🔉';
+    else volIcon.textContent = '🔊';
+    volumeIndicator.classList.add('show');
+    clearTimeout(volumeTimeout);
+    volumeTimeout = setTimeout(() => {
+        volumeIndicator.classList.remove('show');
+    }, 1200);
+}
+
+function changeVolume(delta) {
+    let vol = audioPlayer.volume + delta;
+    vol = Math.max(0, Math.min(1, vol));
+    audioPlayer.volume = vol;
+    showVolume(vol);
+}
+
+function updateDisplay() {
+    const selected = selector.options[selector.selectedIndex];
+    const value = selected.value || '';
+    const icon = selected.getAttribute('data-icon') || '📻';
+    const freq = selected.getAttribute('data-freq') || '🌍 Disponible en todo el mundo';
+    let name = selected.textContent.trim();
+    name = name.replace(/^[🎵🌊📡📢🔊🎶🏛️⚡🌴🇳🇱🏝️🇮🇹🐐🏖️🇨🇱🌍🇦🇷🎷🇪🇸🇬🇷🇵🇱📻🌆🎶🎸🇻🇪🌬️🇷🇴🇮🇹]\s*/, '').trim();
+
+    radioName.textContent = name || 'Selecciona una emisora';
+    radioFreq.textContent = freq;
+    logoContainer.textContent = icon;
+
+    currentStationId = extraerIdRadioGarden(value);
+    if (songInfo) {
+        if (currentStationId) {
+            songInfo.innerHTML = `<span class="loading">🔄 Cargando información...</span>`;
+        } else {
+            songInfo.innerHTML = `<span class="no-data">🎵 Emisora sin metadatos</span>`;
+        }
+    }
+
+    stuckCount = 0;
+    recoveryAttempts = 0;
+
+    if (hls) {
+        hls.destroy();
+        hls = null;
+        isHlsStream = false;
+    }
+
+    audioPlayer.pause();
+    audioPlayer.currentTime = 0;
+    audioPlayer.removeAttribute('src');
+    sourceElem.src = '';
+
+    if (value) {
+        const isHls = value.includes('.m3u8') || value.includes('/HLS/');
+        
+        if (isHls && typeof Hls !== 'undefined' && Hls.isSupported()) {
+            isHlsStream = true;
+            hls = new Hls({ enableWorker: true, lowLatencyMode: true });
+            hls.loadSource(value);
+            hls.attachMedia(audioPlayer);
+            hls.on(Hls.Events.MANIFEST_PARSED, function() {
+                audioPlayer.play().catch(() => {});
+                setTimeout(() => {
+                    if (currentStationId) actualizarMetadatos();
+                }, 3000);
+            });
+            hls.on(Hls.Events.ERROR, function(event, data) {
+                if (data.fatal) {
+                    console.error('❌ Error HLS:', data);
+                    statusText.className = 'error';
+                    statusText.textContent = '❌ Error HLS';
+                    playBtn.textContent = '▶';
+                }
+            });
+            statusText.className = 'playing';
+            statusText.textContent = '📡 Cargando HLS...';
+            formatBadge.textContent = 'HLS';
+            urlBox.textContent = `🔗 ${value}`;
+            urlBox.style.color = '#4ade80';
+            updateCounter();
+            if (selected.index > 0) saveLastStation(selected.index);
+            return;
+        } else if (isHls && audioPlayer.canPlayType('application/vnd.apple.mpegurl')) {
+            isHlsStream = true;
+            audioPlayer.src = value;
+            audioPlayer.play().catch(() => {});
+            statusText.className = 'playing';
+            statusText.textContent = '🔊 Reproduciendo HLS';
+            formatBadge.textContent = 'HLS';
+            urlBox.textContent = `🔗 ${value}`;
+            urlBox.style.color = '#4ade80';
+            updateCounter();
+            if (selected.index > 0) saveLastStation(selected.index);
+            setTimeout(() => {
+                if (currentStationId) actualizarMetadatos();
+            }, 3000);
+            return;
+        }
+
+        isHlsStream = false;
+        sourceElem.src = value;
+        audioPlayer.load();
+        statusText.className = 'playing';
+        statusText.textContent = '🔊 Cargando...';
+        urlBox.textContent = `🔗 ${value}`;
+        urlBox.style.color = '#4ade80';
+        formatBadge.textContent = 'MP3';
+        
+        const playPromise = audioPlayer.play();
+        if (playPromise !== undefined) {
+            playPromise.then(() => {
+                statusText.textContent = '🔊 Reproduciendo en vivo';
+                lastPlayTime = Date.now();
+                setTimeout(() => {
+                    if (currentStationId) actualizarMetadatos();
+                }, 3000);
+            }).catch(() => {
+                statusText.textContent = '▶️ Haz clic en Play';
+            });
+        }
+        if (selected.index > 0) saveLastStation(selected.index);
+    } else {
+        statusText.className = 'stopped';
+        statusText.textContent = selected.index > 0 ? '⏸️ Sin URL' : '⏸️ En espera';
+        urlBox.textContent = selected.index > 0 ? '🔴 URL pendiente' : '🔗 Selecciona una emisora';
+        urlBox.style.color = selected.index > 0 ? '#ef4444' : '#475569';
+        formatBadge.textContent = selected.index > 0 ? '❓' : 'MP3';
+        playBtn.textContent = '▶';
+    }
+    updateCounter();
+}
+
+playBtn.addEventListener('click', function() {
+    if (audioPlayer.paused) {
+        audioPlayer.play().catch(() => {});
+        setTimeout(() => {
+            if (currentStationId) actualizarMetadatos();
+        }, 2000);
+    } else {
+        audioPlayer.pause();
+    }
+});
+
+audioPlayer.addEventListener('play', () => {
+    playBtn.textContent = '⏸';
+    if (!isHlsStream) {
+        statusText.className = 'playing';
+        statusText.textContent = '🔊 Reproduciendo en vivo';
+        lastPlayTime = Date.now();
+        stuckCount = 0;
+        recoveryAttempts = 0;
+    }
+    setTimeout(() => {
+        if (currentStationId) actualizarMetadatos();
+    }, 2000);
+});
+
+audioPlayer.addEventListener('pause', () => {
+    playBtn.textContent = '▶';
+    if (!isHlsStream && sourceElem.src) {
+        statusText.className = 'stopped';
+        statusText.textContent = '⏸️ Pausado';
+    }
+});
+
+audioPlayer.addEventListener('error', () => {
+    if (!isHlsStream) {
+        statusText.className = 'error';
+        statusText.textContent = '❌ Error al reproducir';
+        playBtn.textContent = '▶';
+    }
+});
+
+// ===== BÚSQUEDA AUTOMÁTICA =====
+function startAutoSearch() {
+    if (autoSearchActive) return;
+    autoSearchActive = true;
+    stuckCount = 0;
+    recoveryAttempts = 0;
+    searchBtn.classList.add('active');
+    searchBtn.textContent = '⏹️';
+    searchBtn.title = 'Detener búsqueda';
+    const display = document.querySelector('.radio-display');
+    display.style.border = '3px solid #8b5cf6';
+    display.style.boxShadow = '0 0 30px rgba(139, 92, 246, 0.3)';
+    showAutoSearchMessage('🔍 BÚSQUEDA AUTOMÁTICA ACTIVADA (10s)', '#8b5cf6');
+    autoSearchInterval = setInterval(() => {
+        nextStation();
+        const nameEl = document.getElementById('radioName');
+        nameEl.style.color = '#8b5cf6';
+        setTimeout(() => {
+            nameEl.style.color = '#f1f5f9';
+        }, 300);
+    }, 10000);
+}
+
+function stopAutoSearch() {
+    if (!autoSearchActive) return;
+    autoSearchActive = false;
+    if (autoSearchInterval) {
+        clearInterval(autoSearchInterval);
+        autoSearchInterval = null;
+    }
+    searchBtn.classList.remove('active');
+    searchBtn.textContent = '🔍';
+    searchBtn.title = 'Búsqueda automática 🔍';
+    const display = document.querySelector('.radio-display');
+    display.style.border = '1px solid rgba(255,255,255,0.04)';
+    display.style.boxShadow = 'none';
+    showAutoSearchMessage('⏹️ BÚSQUEDA DETENIDA', '#ef4444');
+}
+
+searchBtn.addEventListener('click', function() {
+    if (autoSearchActive) {
+        stopAutoSearch();
+    } else {
+        startAutoSearch();
+    }
+});
+
+function showAutoSearchMessage(text, color) {
+    const oldMsg = document.querySelector('.auto-search-msg');
+    if (oldMsg) oldMsg.remove();
+    const msg = document.createElement('div');
+    msg.className = 'auto-search-msg';
+    msg.textContent = text;
+    msg.style.cssText = `
+        position: fixed;
+        bottom: 100px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: rgba(0,0,0,0.92);
+        color: ${color};
+        padding: 12px 24px;
+        border-radius: 30px;
+        font-size: 1rem;
+        font-weight: 600;
+        z-index: 300;
+        border: 1px solid ${color}44;
+        box-shadow: 0 10px 40px rgba(0,0,0,0.8);
+        pointer-events: none;
+        animation: fadeInUp 0.3s ease;
+        font-family: 'Segoe UI', system-ui, sans-serif;
+    `;
+    document.body.appendChild(msg);
+    setTimeout(() => {
+        if (msg) {
+            msg.style.transition = 'opacity 0.5s ease';
+            msg.style.opacity = '0';
+            setTimeout(() => msg.remove(), 500);
+        }
+    }, 3000);
+}
+
+prevBtn.addEventListener('click', function() {
+    if (autoSearchActive) stopAutoSearch();
+    prevStation();
+});
+
+nextBtn.addEventListener('click', function() {
+    if (autoSearchActive) stopAutoSearch();
+    nextStation();
+});
+
+selector.addEventListener('change', function() {
+    if (autoSearchActive) stopAutoSearch();
+    updateDisplay();
+});
+
+// ===== RECUPERACIÓN EN ESCALERA =====
+function checkAndRecover() {
+    if (autoSearchActive || isRecovering) return;
+    if (selector.selectedIndex <= 0) return;
+    if (audioPlayer.paused) return;
+
+    try {
+        const currentTime = audioPlayer.currentTime;
+        const buffered = audioPlayer.buffered;
+        
+        let bufferEmpty = false;
+        if (buffered.length > 0) {
+            const bufferedEnd = buffered.end(buffered.length - 1);
+            if (bufferedEnd - currentTime < 1.5) {
+                bufferEmpty = true;
+            }
+        }
+        
+        const timeStuck = (currentTime === lastCurrentTime && currentTime > 0);
+        const timeSinceLastPlay = Date.now() - lastPlayTime;
+        
+        if ((timeStuck && timeSinceLastPlay > 5000) || bufferEmpty) {
+            stuckCount++;
+            if (stuckCount >= 3) {
+                console.log('🔄 Iniciando recuperación en escalera...');
+                smartRecover();
+                stuckCount = 0;
+            }
+        } else {
+            stuckCount = 0;
+            lastCurrentTime = currentTime;
+        }
+    } catch(e) {}
+}
+
+function smartRecover() {
+    if (autoSearchActive || isRecovering) return;
+    isRecovering = true;
+    if (recoveryAttempts >= maxRecoveryAttempts) {
+        fullReload();
+        recoveryAttempts = 0;
+        isRecovering = false;
+        return;
+    }
+    recoveryAttempts++;
+    switch(recoveryAttempts) {
+        case 1: softReload(); break;
+        case 2: channelJumpUnlock(); break;
+        case 3: fullReload(); break;
+        default: fullReload(); isRecovering = false; recoveryAttempts = 0;
+    }
+    setTimeout(() => {
+        if (!audioPlayer.paused && audioPlayer.readyState >= 2) {
+            isRecovering = false;
+            recoveryAttempts = 0;
+        } else {
+            isRecovering = false;
+        }
+    }, 5000);
+}
+
+function softReload() {
+    const selected = selector.options[selector.selectedIndex];
+    const value = selected ? selected.value : '';
+    if (!value || !navigator.onLine) { isRecovering = false; return; }
+    statusText.className = 'recovering';
+    statusText.textContent = '🔄 Recargando...';
+    const isHls = value.includes('.m3u8') || value.includes('/HLS/');
+    if (isHls && hls) {
+        try {
+            hls.loadSource(value);
+            hls.attachMedia(audioPlayer);
+            hls.on(Hls.Events.MANIFEST_PARSED, function() {
+                audioPlayer.play().catch(() => {});
+            });
+        } catch(e) {}
+    } else {
+        try {
+            sourceElem.src = value;
+            audioPlayer.load();
+            audioPlayer.play().catch(() => {});
+        } catch(e) {}
+    }
+}
+
+function channelJumpUnlock() {
+    if (autoSearchActive) return;
+    const currentIndex = getCurrentIndex();
+    const total = selector.options.length - 1;
+    if (currentIndex < 1) { isRecovering = false; return; }
+    const originalIndex = currentIndex;
+    let tempIndex = currentIndex + 1;
+    if (tempIndex > total) tempIndex = 1;
+    goToStation(tempIndex);
+    setTimeout(() => {
+        goToStation(originalIndex);
+    }, 2500);
+}
+
+function fullReload() {
+    const selected = selector.options[selector.selectedIndex];
+    const value = selected ? selected.value : '';
+    if (!value || !navigator.onLine) { isRecovering = false; return; }
+    statusText.className = 'recovering';
+    statusText.textContent = '🔄 Recargando...';
+    const isHls = value.includes('.m3u8') || value.includes('/HLS/');
+    if (isHls && hls) {
+        try {
+            hls.destroy();
+            hls = null;
+            setTimeout(() => {
+                hls = new Hls({ enableWorker: true, lowLatencyMode: true, maxBufferLength: 30 });
+                hls.loadSource(value);
+                hls.attachMedia(audioPlayer);
+                hls.on(Hls.Events.MANIFEST_PARSED, function() {
+                    audioPlayer.play().catch(() => {});
+                });
+            }, 500);
+        } catch(e) {}
+    } else {
+        try {
+            audioPlayer.removeAttribute('src');
+            audioPlayer.load();
+            setTimeout(() => {
+                sourceElem.src = value;
+                audioPlayer.load();
+                audioPlayer.play().catch(() => {});
+            }, 500);
+        } catch(e) {}
+    }
+}
+
+setInterval(checkAndRecover, 5000);
+
+document.addEventListener('visibilitychange', function() {
+    if (!document.hidden && selector.selectedIndex > 0 && !autoSearchActive && !isRecovering) {
+        setTimeout(() => {
+            if (audioPlayer.paused || audioPlayer.readyState < 2) {
+                if (audioPlayer.readyState < 2) {
+                    smartRecover();
+                } else if (audioPlayer.paused) {
+                    audioPlayer.play().catch(() => {});
+                }
+            }
+        }, 1000);
+    }
+});
+
+// ===== DETECTOR DE 45 TOQUES =====
+const TAP_LIMIT = 45;
+const TAP_TIMEOUT = 3000;
+const TARGET_URL = "https://landrasystem-star.github.io/AVISO-AUDIO/";
+
+function handleSecretTap() {
+    const display = document.querySelector('.radio-display');
+    if (display) {
+        display.style.transition = 'all 0.3s ease';
+        display.style.border = '4px solid #ff6b6b';
+        display.style.boxShadow = '0 0 50px rgba(255, 107, 107, 0.5)';
+        setTimeout(() => {
+            display.style.border = '1px solid rgba(255,255,255,0.04)';
+            display.style.boxShadow = 'none';
+        }, 1500);
+    }
+    showAutoSearchMessage('🔔 ¡NOTIFICACIÓN ENVIADA!', '#ff6b6b');
+    window.open(TARGET_URL, '_blank');
+    tapCount = 0;
+}
+
+document.addEventListener('click', function(e) {
+    if (['INPUT', 'SELECT', 'BUTTON', 'A'].includes(e.target.tagName)) return;
+    tapCount++;
+    if (tapTimer) clearTimeout(tapTimer);
+    if (tapCount >= TAP_LIMIT) {
+        handleSecretTap();
+        return;
+    }
+    tapTimer = setTimeout(() => {
+        tapCount = 0;
+        tapTimer = null;
+    }, TAP_TIMEOUT);
+}, { passive: true });
+
+document.addEventListener('touchstart', function(e) {
+    if (['INPUT', 'SELECT', 'BUTTON', 'A'].includes(e.target.tagName)) return;
+    tapCount++;
+    if (tapTimer) clearTimeout(tapTimer);
+    if (tapCount >= TAP_LIMIT) {
+        handleSecretTap();
+        return;
+    }
+    tapTimer = setTimeout(() => {
+        tapCount = 0;
+        tapTimer = null;
+    }, TAP_TIMEOUT);
+}, { passive: true });
+
+// ============================================================
+// 🎬 PESTAÑA VIDEOS
+// ============================================================
+
+document.getElementById('videosTab').addEventListener('click', function() {
+    // CAMBIA ESTA URL POR LA QUE QUIERAS
+    const url = https://landrasystem-star.github.io/videosmusica/'';
+    window.open(url, '_blank');
+});
+
+// ============================================================
+// 🎯 CONTROL DEL CHAT LATERAL
+// ============================================================
+
+const chatLateral = document.getElementById('chatLateral');
+const chatTab = document.getElementById('chatTab');
+const chatCloseBtnChat = document.getElementById('chatCloseBtn');
+const chatContainer = document.getElementById('chatContainer');
+const tabBadge = document.getElementById('tabBadge');
+const chatBadge = document.getElementById('chatBadge');
+const chatIframe = document.getElementById('chatIframe');
+
+let chatAbierto = false;
+let notiCount = 0;
+let userCount = 0;
+let hoverTimeout = null;
+let clicActivo = false;
+
+function abrirChat() {
+    chatAbierto = true;
+    chatLateral.classList.add('open');
+    document.body.classList.add('chat-abierto');
+    notiCount = 0;
+    tabBadge.classList.remove('visible');
+}
+
+function cerrarChat() {
+    chatAbierto = false;
+    chatLateral.classList.remove('open');
+    document.body.classList.remove('chat-abierto');
+    clicActivo = false;
+}
+
+function toggleChat() {
+    if (chatAbierto) {
+        cerrarChat();
+    } else {
+        abrirChat();
+        clicActivo = true;
+    }
+}
+
+chatTab.addEventListener('click', function(e) {
+    e.stopPropagation();
+    toggleChat();
+});
+
+chatTab.addEventListener('mouseenter', function() {
+    if (hoverTimeout) clearTimeout(hoverTimeout);
+    if (!chatAbierto && !clicActivo) {
+        hoverTimeout = setTimeout(() => {
+            abrirChat();
+        }, 300);
+    }
+});
+
+chatTab.addEventListener('mouseleave', function() {
+    if (hoverTimeout) {
+        clearTimeout(hoverTimeout);
+        hoverTimeout = null;
+    }
+});
+
+chatContainer.addEventListener('mouseenter', function() {
+    if (hoverTimeout) {
+        clearTimeout(hoverTimeout);
+        hoverTimeout = null;
+    }
+});
+
+chatContainer.addEventListener('mouseleave', function() {
+    if (!clicActivo) {
+        hoverTimeout = setTimeout(() => {
+            cerrarChat();
+        }, 500);
+    }
+});
+
+chatCloseBtnChat.addEventListener('click', function(e) {
+    e.stopPropagation();
+    cerrarChat();
+});
+
+setInterval(() => {
+    if (!chatAbierto) {
+        notiCount++;
+        tabBadge.textContent = notiCount > 9 ? '9+' : notiCount;
+        tabBadge.classList.add('visible');
+    }
+}, 25000);
+
+setInterval(() => {
+    userCount = Math.floor(Math.random() * 8) + 1;
+    chatBadge.textContent = `● ${userCount}`;
+}, 30000);
+
+// ============================================================
+// 🚀 INICIO
+// ============================================================
+
+if (!loadLastStation()) {
+    if (selector.options.length > 1) {
+        selector.selectedIndex = 1;
+        updateDisplay();
+        updateCounter();
+    }
+}
+
+setTimeout(() => {
+    if (selector.selectedIndex > 0 && audioPlayer.src) {
+        audioPlayer.play().catch(() => {});
+    }
+}, 1000);
+
+console.log('📻 Radio Canarias - 153 emisoras disponibles');
+console.log('🎬 Pestaña VIDEOS - Haz clic para abrir');
+console.log('💬 Chat lateral translúcido - Clic o hover para abrir');
+console.log('🎧 ¡Disfruta de la radio!');
+</script>
+
+</body>
+</html>
